@@ -1,0 +1,25 @@
+# Ambientes Virtuais
+venv/
+env/
+
+# Arquivos de Cache do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testes e Cobertura
+.pytest_cache/
+.coverage
+
+# Variáveis de Ambiente e Segredos (CRÍTICO)
+.env
+.env.*
+
+# Bancos de Dados Locais (caso o SQLAlchemy gere arquivos SQLite)
+*.sqlite3
+*.db
+
+# Arquivos do Sistema Operacional e IDE (VS Code)
+.DS_Store
+.vscode/
