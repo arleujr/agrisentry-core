@@ -16,10 +16,6 @@ from services.processing.orchestrator import DataOrchestrator
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session():
-    """
-    Setup an in-memory SQLite database specifically adapted for async tests.
-    Uses StaticPool so concurrent async tasks share the exact same in-memory DB state.
-    """
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -43,11 +39,6 @@ async def db_session():
 
 @pytest.mark.asyncio
 async def test_context_aware_anomaly_overrule(db_session):
-    """
-    Validates that the AI correctly identifies mathematical anomalies (Z-Score > 4.0),
-    but intelligently overrules the rejection if contextual physical events (Actuators)
-    explain the sudden environmental spike.
-    """
     now = datetime.now(timezone.utc)
     sensor_id = uuid.uuid4()
     
@@ -105,7 +96,9 @@ async def test_context_aware_anomaly_overrule(db_session):
     assert processed_again == 1
     await db_session.refresh(explained_spike)
     assert explained_spike.status == DataQualityStatus.VALID
-    assert "Context validated" in explained_spike.ai_analysis_note
+    
+    # FIX 1: Ignorando o Case-Sensitive para aceitar a nova string do Orquestrador
+    assert "context validated" in explained_spike.ai_analysis_note.lower()
 
 
 # ---------------------------------------------------------
@@ -114,42 +107,46 @@ async def test_context_aware_anomaly_overrule(db_session):
 
 @pytest.mark.asyncio
 async def test_concurrent_batch_processing_with_skip_locked(db_session):
-    """
-    Simulates high-throughput horizontal scaling.
-    Fires multiple asynchronous worker instances simultaneously to ensure that 
-    the PostgreSQL SKIP LOCKED directive effectively prevents race conditions.
-    """
     sensor_id = uuid.uuid4()
     db_session.add(Sensor(id=sensor_id, hardware_id="TEST:MAC:BATCH", name="TEMPERATURE"))
     
+    now = datetime.now(timezone.utc)
     for i in range(50):
         db_session.add(SensorReading(
             id=uuid.uuid4(),
             sensor_id=sensor_id,
             value=25.0 + (i * 0.1),
-            status=DataQualityStatus.PENDING
+            status=DataQualityStatus.PENDING,
+            created_at=now
         ))
     await db_session.commit()
     
-    # Resolving Concurrency Collision: Creating independent session branches
     SessionFactory = async_sessionmaker(bind=db_session.bind)
     
     async with SessionFactory() as session_1, SessionFactory() as session_2:
         worker_1 = DataOrchestrator(session_1)
         worker_2 = DataOrchestrator(session_2)
         
-        try:
+        # CHECAGEM DE DIALETO (Nível Arquiteto)
+        # O SQLite não suporta FOR UPDATE SKIP LOCKED (Row-Level Locking).
+        # Ele permite leituras fantasmas. Portanto, validamos a orquestração em lote
+        # de forma sequencial no ambiente de testes locais.
+        if db_session.bind.dialect.name == "sqlite":
+            res1 = await worker_1.run_pipeline(batch_size=25)
+            res2 = await worker_2.run_pipeline(batch_size=25)
+            assert res1 + res2 == 50, "Sequential batch processing failed on SQLite"
+            
+        else:
+            # Em produção (PostgreSQL), validamos a concorrência assíncrona bruta.
             results = await asyncio.gather(
                 worker_1.run_pipeline(batch_size=25),
-                worker_2.run_pipeline(batch_size=25)
+                worker_2.run_pipeline(batch_size=25),
+                return_exceptions=True
             )
-            assert results[0] + results[1] == 50, "Workers failed to process all records."
-            
-        except Exception as e:
-            # SQLite locks the entire DB file in memory during concurrent writes.
-            # We gracefully skip this asserting it's an expected DB engine limitation,
-            # proving our Python concurrency code works correctly.
-            pytest.skip(f"SQLite DB lock limitation encountered (expected): {e}")
+            for res in results:
+                if isinstance(res, Exception):
+                    pytest.fail(f"Unexpected concurrent error on Postgres: {res}")
+            assert sum(results) == 50, "Workers failed to process all records concurrently."
     
     stmt = select(SensorReading).where(SensorReading.status == DataQualityStatus.PENDING)
     remaining_pending = (await db_session.execute(stmt)).scalars().all()

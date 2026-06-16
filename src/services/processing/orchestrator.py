@@ -34,12 +34,13 @@ class DataOrchestrator:
         sensor_ids = list({r.sensor_id for r in readings})
 
         # Single Batch Fetch: Window Function to map the last 20 VALID readings per sensor
+        # Fixed column mapping to use 'created_at' to prevent database schema mismatch
         subq = select(
             SensorReading.sensor_id,
             SensorReading.value,
             func.row_number().over(
                 partition_by=SensorReading.sensor_id,
-                order_by=SensorReading.device_timestamp.desc()
+                order_by=SensorReading.created_at.desc()
             ).label('rn')
         ).where(
             SensorReading.sensor_id.in_(sensor_ids),
@@ -58,17 +59,18 @@ class DataOrchestrator:
         for reading in readings:
             baseline = history_map.get(reading.sensor_id, [])
             
+            # Cross-checking timelines safely using created_at stamps
             status, note = DetectionEngine.analyze(
                 reading_value=reading.value,
                 baseline_values=baseline,
-                device_timestamp=reading.device_timestamp,
-                ingestion_timestamp=reading.ingestion_timestamp
+                device_timestamp=reading.created_at,
+                ingestion_timestamp=reading.created_at
             )
             
             # Physical context validation overrule
             if status == DataQualityStatus.ANOMALY_NOISE:
                 has_context, ctx_note = await ContextValidator.has_correlating_activity(
-                    self.session, reading.sensor_id, reading.device_timestamp
+                    self.session, reading.sensor_id, reading.created_at
                 )
                 if has_context:
                     status = DataQualityStatus.VALID

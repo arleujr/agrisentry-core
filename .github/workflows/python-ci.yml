@@ -1,4 +1,4 @@
-name: AgriPlanum Core CI
+name: AgriSentry Core CI
 
 on:
   push:
