@@ -9,8 +9,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     
     # Notice the prefix: 'postgresql+asyncpg' is mandatory for async SQLAlchemy
-    DATABASE_URL: str = "postgresql+asyncpg://agrisentry_admin:admin_secure_password123@localhost:5432/agrisentry_db"
-    
+    DATABASE_URL: str 
     # Tuning for the Background Worker
     WORKER_SLEEP_SECONDS: int = 5
     WORKER_BATCH_SIZE: int = 100
