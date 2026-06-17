@@ -27,8 +27,11 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio aiosqlite
 
-      - name: Run Integration Tests
+      - name: Run tests
+        # 🚀 Injetando variáveis direto no ambiente do runner
         env:
           PYTHONPATH: src
-        run: |
-          python -m pytest tests/ -v
+          DATABASE_URL: postgresql+asyncpg://postgres:fake_password@localhost:5432/postgres_test
+          MQTT_HOST: 127.0.0.1
+          MQTT_PORT: 1883
+        run: python -m pytest tests/ -v
