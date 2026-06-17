@@ -29,6 +29,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.get("/")
+async def root_redirect():
+    return {"message": "AgriSentry Core API is running. Head over to /health for status check."}
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 async def health_check():

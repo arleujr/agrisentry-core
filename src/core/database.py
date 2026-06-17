@@ -12,8 +12,10 @@ engine = create_async_engine(
     echo=False, # Set to True to debug raw SQL queries
     pool_size=20,
     max_overflow=10,
-    pool_pre_ping=True 
-)
+    pool_pre_ping=True,
+    connect_args={
+        "statement_cache_size": 0
+    })
 
 # AsyncSession factory
 AsyncSessionLocal = async_sessionmaker(
