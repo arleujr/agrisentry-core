@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from services.processing.orchestrator import DataOrchestrator
-from db.database import engine  # Assuming standard path for async_engine
+from core.database import engine  
 
 logger = logging.getLogger(__name__)
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
