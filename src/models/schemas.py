@@ -35,7 +35,7 @@ class SensorReading(Base):
     value = Column(Float, nullable=False)
     sensor_id = Column(UUID(as_uuid=True), ForeignKey("sensors.id", ondelete="CASCADE"), nullable=False)
     status = Column(
-        Enum(DataQualityStatus, name="DataQualityStatus"), 
+        Enum(DataQualityStatus, name="dataqualitystatus"), 
         nullable=False, 
         default=DataQualityStatus.PENDING
     )
