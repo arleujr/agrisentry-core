@@ -64,10 +64,6 @@ async def root_redirect():
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 async def health_check():
-    """
-    Liveness and Readiness probe endpoint for infrastructure monitoring (K8s/AWS).
-    Verifies API availability and underlying database pool connectivity.
-    """
     try:
         async with engine.connect() as conn:
             await conn.execute("SELECT 1")
@@ -80,22 +76,22 @@ async def health_check():
             media_type="application/json"
         )
 
+# ✨ ROTA PRINCIPAL (v1)
 @app.post("/v1/analyze", response_model=AnalysisResponse, status_code=status.HTTP_200_OK)
 async def analyze_telemetry_batch(payload: AnalysisRequest):
-    """
-    Receives a batch of telemetry readings from the Rust Gateway,
-    runs anomaly detection logic (ML model or rules),
-    and returns classification results.
-    """
+    return await process_analysis(payload)
+
+# ✨ ROTA DE SEGURANÇA (Caso o proxy remova o prefixo)
+@app.post("/analyze", response_model=AnalysisResponse, status_code=status.HTTP_200_OK)
+async def analyze_telemetry_batch_fallback(payload: AnalysisRequest):
+    return await process_analysis(payload)
+
+# 🧠 Função isolada que processa a lógica de IA
+async def process_analysis(payload: AnalysisRequest):
     logger.info(f"🧠 Received batch of {len(payload.readings)} readings for AI analysis.")
     
     analysis_results = []
     for item in payload.readings:
-        # ------------------------------------------------------------------
-        # 🔮 Here you plug in your ML model (XGBoost, Isolation Forest, etc.)
-        # Example: prediction = model.predict([[item.value]])[0]
-        # ------------------------------------------------------------------
-        
         # Simulated anomaly detection logic
         if item.value > 90.0:
             status_classification = "ANOMALY_CRITICAL"
