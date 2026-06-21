@@ -17,10 +17,11 @@ graph LR
     C -->|SKIP LOCKED Fetch| D{AgriSentry Core Worker}
     B -->|HTTP Batch Post| K[FastAPI API Engine]
     K -->|Simulated AI Inference| L[Rule/Threshold Matrix]
-    D -->|Z-Score Math| E[Statistical Filter]
+    D -->|Pydantic Schema Validation| M[Silver Layer Buffering]
+    M -->|Z-Score Math| E[Statistical Filter]
     E -->|Anomaly Detected| F[Context Validator]
     F -->|Pump Active?| G[Overrule Anomaly]
-    F -->|No Context| H[Flag as Noise]
+    F -->|No Context| H[Flag as Noise / Destructive Drift]
     E -->|Valid| I[Mark as VALID]
     G --> I
     I --> C
@@ -29,7 +30,14 @@ graph LR
 
 ```
 
-## Key Architectural Decisions (Senior-Level Features)
+## Medallion Architecture & Data Quality Guardrails
+
+This service replicates defensive **Medallion Architecture principles** to shield downstream systems from bad field data and unannounced payload structural modifications:
+
+* **Silver Layer Buffering & Schema Validation:** Telemetry data is parsed via strict contract layers. Additive schema modifications (new fields) are absorbed automatically with structural fallbacks. Destructive drifts (missing core metrics) throw a controlled failure.
+* **Defensive Error Handling:** Every pipeline stage is isolated with granular `try/catch` wrappers. Instead of crashing the engine, malformed data blocks are isolated, safely logged via structured schemas, and flagged for pipeline SLA analysis.
+
+## Key Architectural Decisions
 
 * **Dual-Engine Execution Framework:** Seamlessly hosts both a high-throughput FastAPI ASGI REST instance and a decoupled, cooperative background task loop running on the standard asyncio runtime event stream.
 * **Zero N+1 Query Footprint:** Utilizes SQLAlchemy Window Functions (`ROW_NUMBER() OVER`) and Single Batch Fetching to pull historical baseline data without hammering the database inside loops.
@@ -42,7 +50,7 @@ graph LR
 
 The engine exposes dedicated endpoints designed to orchestrate low-latency classifications for downstream microservices (such as the `agrisentry-iot-gateway`).
 
-### 🧠 Telemetry Analytics Batch Evaluation
+### Telemetry Analytics Batch Evaluation
 
 * **Endpoint:** `POST /v1/analyze` (with structural fallback matching `POST /analyze`)
 * **Payload Structure (`AnalysisRequest`):**
@@ -118,11 +126,21 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000
 
 ---
 
-## Testing Strategy
+## Testing Strategy & Assertions
 
-The test suite is built with `pytest` and `pytest-asyncio`. It features **Dialect-Aware logic** to handle the physical limitations of SQLite during local testing versus PostgreSQL in production.
+The engineering health of this application is secured by an automated validation test suite driven by `pytest` and `pytest-asyncio`.
 
-To run the integration suite locally (uses in-memory SQLite):
+### Dialect-Aware Test Isolation
+
+Because production requires real-time concurrent features like `FOR UPDATE SKIP LOCKED` (native to PostgreSQL/TimescaleDB), the test suite implements a custom dialect interceptor. During automated local executions or CI/CD pipelines, the suite dynamically provision-mocks an **in-memory SQLite environment**, stripping PostgreSQL-specific keywords cleanly to guarantee high execution speeds and zero database dependency.
+
+### Covered Test Matrix
+
+* **Schema Evolution Testing:** Asserts that the ingestion pipeline gracefully bypasses additive unknown payloads while accurately capturing and dropping destructive missing fields.
+* **Exponential Backoff Evaluation:** Validates that the background thread network timing multiplies correctly upon mock connectivity dropouts.
+* **Asynchronous API Integration:** Asserts response structural consistency and low latency under mock load concurrency.
+
+To execute the test suite locally:
 
 ```bash
 pytest tests/ -v
@@ -131,10 +149,6 @@ pytest tests/ -v
 
 ---
 
-## 📄 License
+## License
 
 Distributed under the MIT License.
-
-```
-
-```
