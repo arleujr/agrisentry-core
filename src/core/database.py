@@ -9,24 +9,21 @@ logger = logging.getLogger(__name__)
 # pool_pre_ping checks if the connection is alive before using it, preventing dropped connection errors
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False, # Set to True to debug raw SQL queries
+    echo=False,  # Set to True to debug raw SQL queries
     pool_size=20,
     max_overflow=10,
     pool_pre_ping=True,
-    connect_args={
-        "statement_cache_size": 0
-    })
+    connect_args={"statement_cache_size": 0},
+)
 
 # AsyncSession factory
 AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False
+    bind=engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
 )
 
 # Base class for our ORM models (Marco 2)
 Base = declarative_base()
+
 
 async def get_db_session():
     """

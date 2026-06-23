@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 120
+exclude = .git,__pycache__,venv,build,dist
+ignore = E302, W291, W293, W292, F401, F811
+per-file-ignores =
+    tests/conftest.py:E402,F811

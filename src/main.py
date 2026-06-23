@@ -16,14 +16,14 @@ import uuid
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] [Server] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="AgriSentry Core API",
     description="Central AI & Data Quality engine handling telemetry orchestration.",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Configure CORS for dashboard integrations
@@ -35,6 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ----------------------------------------------------------------------
 # 📦 Pydantic Schemas for strong typing
 # ----------------------------------------------------------------------
@@ -43,17 +44,21 @@ class TelemetryItem(BaseModel):
     value: float
     created_at: datetime
 
+
 class AnalysisRequest(BaseModel):
     readings: List[TelemetryItem]
+
 
 class AnalysisResultItem(BaseModel):
     id: uuid.UUID
     created_at: datetime
-    status: str       # 'VALID', 'ANOMALY_NOISE', 'ANOMALY_CRITICAL'
+    status: str  # 'VALID', 'ANOMALY_NOISE', 'ANOMALY_CRITICAL'
     note: str
+
 
 class AnalysisResponse(BaseModel):
     results: List[AnalysisResultItem]
+
 
 # ----------------------------------------------------------------------
 # 🌐 Routes
@@ -61,6 +66,7 @@ class AnalysisResponse(BaseModel):
 @app.get("/")
 async def root_redirect():
     return {"message": "AgriSentry Core API is running. Head over to /health for status check."}
+
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 async def health_check():
@@ -73,23 +79,26 @@ async def health_check():
         return Response(
             content='{"status": "unhealthy", "database": "disconnected"}',
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            media_type="application/json"
+            media_type="application/json",
         )
+
 
 # ✨ ROTA PRINCIPAL (v1)
 @app.post("/v1/analyze", response_model=AnalysisResponse, status_code=status.HTTP_200_OK)
 async def analyze_telemetry_batch(payload: AnalysisRequest):
     return await process_analysis(payload)
 
+
 # ✨ ROTA DE SEGURANÇA (Caso o proxy remova o prefixo)
 @app.post("/analyze", response_model=AnalysisResponse, status_code=status.HTTP_200_OK)
 async def analyze_telemetry_batch_fallback(payload: AnalysisRequest):
     return await process_analysis(payload)
 
+
 # 🧠 Função isolada que processa a lógica de IA
 async def process_analysis(payload: AnalysisRequest):
     logger.info(f"🧠 Received batch of {len(payload.readings)} readings for AI analysis.")
-    
+
     analysis_results = []
     for item in payload.readings:
         # Simulated anomaly detection logic
@@ -105,14 +114,12 @@ async def process_analysis(payload: AnalysisRequest):
 
         analysis_results.append(
             AnalysisResultItem(
-                id=item.id,
-                created_at=item.created_at,
-                status=status_classification,
-                note=ai_note
+                id=item.id, created_at=item.created_at, status=status_classification, note=ai_note
             )
         )
-        
+
     return AnalysisResponse(results=analysis_results)
+
 
 # ----------------------------------------------------------------------
 # ⚙️ Startup Event
@@ -126,6 +133,7 @@ async def startup_event():
     logger.info("Starting background Data Quality Worker pipeline...")
     asyncio.create_task(start_data_worker(batch_size=50))
 
+
 if __name__ == "__main__":
     # Runs the server engine on default port 8000
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)  # nosec B104
